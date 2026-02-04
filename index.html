@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Void Garden</title>
+    <title>Void Garden - Interactive</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #050505; font-family: monospace; }
         canvas { display: block; }
@@ -15,9 +15,68 @@
             transform: translate(-50%, -50%);
             color: #fff;
             text-align: center;
-            pointer-events: none; /* Let clicks pass through after fading */
+            pointer-events: none;
             transition: opacity 1s;
+            z-index: 50;
         }
+
+        /* --- CONTROL PANEL STYLES --- */
+        #controls {
+            position: absolute;
+            top: 20px; left: 0;
+            background: rgba(10, 10, 10, 0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 0 10px 10px 0;
+            font-size: 12px;
+            /* Hide off-screen, peek out slightly */
+            transform: translateX(-90%);
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            z-index: 1000;
+            border-right: 1px solid #333;
+            box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+            width: 220px;
+        }
+        /* Slide out on hover */
+        #controls:hover {
+            transform: translateX(0);
+        }
+        /* The "Handle" to indicate it's there */
+        #controls::after {
+            content: "🎨";
+            position: absolute;
+            right: -30px;
+            top: 10px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        #controls h3 { margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        #controls label { display: block; margin: 12px 0; display: flex; justify-content: space-between; align-items: center; }
+        #controls input[type="range"] { width: 100px; accent-color: #ff0055; }
+        #controls select { background: #222; color: #fff; border: 1px solid #444; padding: 2px; border-radius: 4px; }
+        
+        /* Color Palette Grid */
+        .color-palette { display: flex; gap: 8px; margin: 15px 0; justify-content: center; }
+        .color-option {
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #222;
+            transition: transform 0.2s;
+        }
+        .color-option:hover { transform: scale(1.2); }
+        .color-option.active { border-color: #fff; box-shadow: 0 0 10px #fff; }
+
+        /* Buttons */
+        .btn-group { display: flex; gap: 5px; }
+        #controls button {
+            background: #222; color: white; border: 1px solid #444;
+            padding: 8px; width: 100%; border-radius: 5px; cursor: pointer;
+            transition: background 0.2s;
+        }
+        #controls button:hover { background: #444; }
+        #rainbowMode.active { background: linear-gradient(45deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f); border: none; color: black; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -25,6 +84,37 @@
 <div id="overlay">
     <h1>VOID GARDEN</h1>
     <p>Click / Tap to Create</p>
+    <p style="font-size: 0.8em; opacity: 0.7;">Hover left for controls</p>
+</div>
+
+<div id="controls">
+    <h3>Garden Controls</h3>
+    
+    <label>Shape: 
+        <select id="flowerType">
+            <option value="random">Random</option>
+            <option value="0">Orbs</option>
+            <option value="1">Stars</option>
+            <option value="2">Lotus</option>
+        </select>
+    </label>
+    
+    <label>Size: <input type="range" id="sizeSlider" min="5" max="50" value="20"></label>
+    <label>Speed: <input type="range" id="speedSlider" min="0" max="3" step="0.1" value="1"></label>
+    <label>Life: <input type="range" id="lifespanSlider" min="0.5" max="3" step="0.1" value="1"></label>
+    
+    <div class="color-palette">
+        <div class="color-option" data-hue="320" style="background: hsl(320, 100%, 50%)"></div>
+        <div class="color-option" data-hue="170" style="background: hsl(170, 100%, 50%)"></div>
+        <div class="color-option" data-hue="270" style="background: hsl(270, 100%, 50%)"></div>
+        <div class="color-option" data-hue="45" style="background: hsl(45, 100%, 50%)"></div>
+        <div class="color-option" data-hue="0" style="background: hsl(0, 100%, 50%)"></div>
+    </div>
+    
+    <div class="btn-group">
+        <button id="rainbowMode">🌈 Rainbow</button>
+        <button id="clearBtn">🗑️ Clear</button>
+    </div>
 </div>
 
 <canvas id="canvas"></canvas>
@@ -37,57 +127,87 @@
     let width, height;
     let flowers = [];
 
-    // --- AUDIO ENGINE (The New Stuff) ---
-    // Browsers require a user gesture to start audio. We create it, but it starts "suspended".
+    // --- GLOBAL SETTINGS (Controlled by GUI) ---
+    let selectedFlowerType = 'random';
+    let selectedHue = null;
+    let sizeMultiplier = 1;
+    let speedMultiplier = 1;
+    let lifespanMultiplier = 1;
+    let isRainbowMode = false;
+
+    // --- GUI EVENT LISTENERS ---
+    document.getElementById('flowerType').addEventListener('change', (e) => selectedFlowerType = e.target.value);
+    
+    document.getElementById('sizeSlider').addEventListener('input', (e) => sizeMultiplier = e.target.value / 20);
+    
+    document.getElementById('speedSlider').addEventListener('input', (e) => speedMultiplier = e.target.value);
+    
+    // Inverted logic for lifespan (Slider right = longer life = smaller decay)
+    document.getElementById('lifespanSlider').addEventListener('input', (e) => lifespanMultiplier = e.target.value);
+
+    document.querySelectorAll('.color-option').forEach(option => {
+        option.addEventListener('click', (e) => {
+            // Remove active class from all
+            document.querySelectorAll('.color-option').forEach(o => o.classList.remove('active'));
+            document.getElementById('rainbowMode').classList.remove('active');
+            
+            // Set active
+            e.target.classList.add('active');
+            selectedHue = parseInt(e.target.dataset.hue);
+            isRainbowMode = false;
+        });
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => flowers = []);
+    
+    document.getElementById('rainbowMode').addEventListener('click', (e) => {
+        isRainbowMode = !isRainbowMode;
+        e.target.classList.toggle('active');
+        if(isRainbowMode) {
+            document.querySelectorAll('.color-option').forEach(o => o.classList.remove('active'));
+            selectedHue = null;
+        }
+    });
+
+    // KEYBOARD SHORTCUTS
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'c') flowers = [];
+        if (e.key === 'r') document.getElementById('flowerType').value = selectedFlowerType = 'random';
+        if (e.key === '1') document.getElementById('flowerType').value = selectedFlowerType = '0';
+        if (e.key === '2') document.getElementById('flowerType').value = selectedFlowerType = '1';
+        if (e.key === '3') document.getElementById('flowerType').value = selectedFlowerType = '2';
+        if (e.key === ' ') document.getElementById('rainbowMode').click();
+    });
+
+    // --- AUDIO ENGINE ---
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const audioCtx = new AudioContext();
-
-    // Pentatonic Scale (C Minor Pentatonic) - Always sounds good
-    // Frequencies for: C4, Eb4, F4, G4, Bb4, C5, Eb5, F5...
-    const scale = [
-        261.63, 311.13, 349.23, 392.00, 466.16, 
-        523.25, 622.25, 698.46, 783.99, 932.33,
-        1046.50, 1244.51
-    ];
+    const scale = [261.63, 311.13, 349.23, 392.00, 466.16, 523.25, 622.25, 698.46, 783.99, 932.33, 1046.50, 1244.51];
 
     function playNote(y) {
-        // Resume audio context if it's suspended (browser policy)
         if (audioCtx.state === 'suspended') {
             audioCtx.resume();
-            overlay.style.opacity = 0; // Fade out text
+            overlay.style.opacity = 0;
         }
-
-        // Map Y position to a note in our scale
-        // Higher on screen (low Y) = Higher Pitch
         const percentage = 1 - (y / height); 
         const index = Math.floor(percentage * scale.length);
         const frequency = scale[Math.min(index, scale.length - 1)];
 
-        // 1. Create Oscillator (The Sound Source)
         const osc = audioCtx.createOscillator();
-        osc.type = 'sine'; // Sine wave = Pure, glass-like tone
+        osc.type = 'sine';
         osc.frequency.value = frequency;
-
-        // 2. Create Gain Node (The Volume Knob)
         const gainNode = audioCtx.createGain();
-        
-        // 3. Connect: Osc -> Gain -> Speakers
         osc.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-
-        // 4. Envelope (Fade In/Out)
         const now = audioCtx.currentTime;
-        gainNode.gain.setValueAtTime(0, now); // Start silent
-        gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05); // Attack (fast volume up)
-        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.0); // Decay (slow fade out)
-
-        // 5. Play and Stop
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
         osc.start(now);
-        osc.stop(now + 2.0); // Stop after 2 seconds
+        osc.stop(now + 2.0);
     }
-    // ------------------------------------
 
-    // SETUP
+    // --- CANVAS SETUP ---
     function resize() {
         width = canvas.width = window.innerWidth;
         height = canvas.height = window.innerHeight;
@@ -95,41 +215,50 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // THE FLOWER CLASS
-    // THE FLOWER CLASS (Phase 4: Shapes)
+    // --- FLOWER CLASS (Updated with GUI Logic) ---
     class Flower {
         constructor(x, y) {
             this.x = x;
             this.y = y;
-            this.baseSize = Math.random() * 15 + 5; 
+            // Apply Size Multiplier
+            this.baseSize = (Math.random() * 15 + 5) * sizeMultiplier; 
             this.size = 0;
             
-            // TYPE: 0 = Orb, 1 = Diamond Star, 2 = Lotus
-            this.type = Math.floor(Math.random() * 3);
+            // Apply Type Selection
+            if (selectedFlowerType === 'random') {
+                this.type = Math.floor(Math.random() * 3);
+            } else {
+                this.type = parseInt(selectedFlowerType);
+            }
             
-            // ROTATION: Random spin speed
+            // Apply Speed Multiplier
             this.angle = 0;
-            this.spinSpeed = Math.random() * 0.05 - 0.025; // Positive or negative spin
-
-            // MOVEMENT
+            this.spinSpeed = (Math.random() * 0.05 - 0.025) * speedMultiplier;
             this.moveAngle = Math.random() * Math.PI * 2;
-            this.velocity = Math.random() * 0.3 + 0.1; 
+            this.velocity = (Math.random() * 0.3 + 0.1) * speedMultiplier;
             this.vx = Math.cos(this.moveAngle) * this.velocity;
             this.vy = Math.sin(this.moveAngle) * this.velocity;
 
+            // Apply Lifespan Multiplier (Higher multiplier = slower decay)
             this.life = 1.0;
-            this.decay = 0.002; 
+            this.decay = 0.002 / lifespanMultiplier; 
             
-            const hues = [320, 170, 270, 45]; 
-            this.hue = hues[Math.floor(Math.random() * hues.length)];
+            // Apply Color Selection
+            if (isRainbowMode) {
+                this.hue = Math.random() * 360;
+            } else if (selectedHue !== null) {
+                this.hue = selectedHue;
+            } else {
+                const hues = [320, 170, 270, 45]; 
+                this.hue = hues[Math.floor(Math.random() * hues.length)];
+            }
+
             this.pulseOffset = Math.random() * 100;
         }
 
         update() {
             this.x += this.vx;
             this.y += this.vy;
-            
-            // Update rotation angle
             this.angle += this.spinSpeed;
 
             if (this.x < 0 || this.x > width) this.vx *= -1;
@@ -141,61 +270,52 @@
         }
 
         draw() {
-            // SAVE the current drawing state
             ctx.save();
-            // MOVE the "camera" to the flower's center
             ctx.translate(this.x, this.y);
-            // ROTATE the "camera"
             ctx.rotate(this.angle);
-
             ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.life})`;
             
-            // Draw based on type
-            if (this.type === 0) {
-                // TYPE 0: The Classic Orb
+            if (this.type === 0) { // Orb
                 ctx.beginPath();
                 ctx.arc(0, 0, Math.max(0, this.size), 0, Math.PI * 2);
                 ctx.fill();
-            } 
-            else if (this.type === 1) {
-                // TYPE 1: The Neon Star (A rotating square)
+            } else if (this.type === 1) { // Star
                 ctx.beginPath();
-                // Draw a square centered at (0,0)
                 ctx.rect(-this.size, -this.size, this.size * 2, this.size * 2);
                 ctx.fill();
-            } 
-            else if (this.type === 2) {
-                // TYPE 2: The Digital Lotus (4 overlapping ovals)
+            } else if (this.type === 2) { // Lotus
                 for (let i = 0; i < 4; i++) {
-                    ctx.rotate(Math.PI / 4); // Rotate 45 degrees
+                    ctx.rotate(Math.PI / 4);
                     ctx.beginPath();
-                    // Ellipse: x, y, radiusX, radiusY, rotation, startAngle, endAngle
                     ctx.ellipse(0, 0, Math.max(0, this.size * 1.5), Math.max(0, this.size * 0.5), 0, 0, Math.PI * 2);
                     ctx.fill();
                 }
             }
-
-            // RESTORE the drawing state so other flowers aren't messed up
             ctx.restore();
         }
     }
 
-    // INTERACTION
+    // --- INTERACTION ---
+    function spawn(x, y) {
+        flowers.push(new Flower(x, y));
+        playNote(y);
+    }
+
     window.addEventListener('mousedown', (e) => {
-        flowers.push(new Flower(e.clientX, e.clientY));
-        playNote(e.clientY); // Trigger Sound
+        // Don't spawn if clicking inside the control panel
+        if (e.target.closest('#controls')) return;
+        spawn(e.clientX, e.clientY);
     });
 
     window.addEventListener('touchstart', (e) => {
-        // Prevent default zoom/scroll gestures
+        if (e.target.closest('#controls')) return;
         e.preventDefault(); 
         for (let i=0; i < e.touches.length; i++) {
-            flowers.push(new Flower(e.touches[i].clientX, e.touches[i].clientY));
-            playNote(e.touches[i].clientY); // Trigger Sound
+            spawn(e.touches[i].clientX, e.touches[i].clientY);
         }
     });
 
-    // ANIMATION LOOP
+    // --- ANIMATION LOOP ---
     function animate() {
         ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = 'rgba(5, 5, 5, 0.05)'; 
@@ -206,14 +326,10 @@
         for (let i = flowers.length - 1; i >= 0; i--) {
             flowers[i].update();
             flowers[i].draw();
-
-            if (flowers[i].life <= 0) {
-                flowers.splice(i, 1);
-            }
+            if (flowers[i].life <= 0) flowers.splice(i, 1);
         }
         requestAnimationFrame(animate);
     }
-
     animate();
 </script>
 </body>
