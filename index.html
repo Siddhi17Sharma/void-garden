@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Void Garden</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let width, height;
+    let flowers = [];
+
+    // SETUP
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // THE FLOWER CLASS (Phase 1 Logic)
+    class Flower {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.baseSize = Math.random() * 10 + 5;
+            this.size = 0;
+            
+            // Movement: Drift
+            this.angle = Math.random() * Math.PI * 2;
+            this.velocity = Math.random() * 0.5 + 0.2;
+            this.vx = Math.cos(this.angle) * this.velocity;
+            this.vy = Math.sin(this.angle) * this.velocity;
+
+            // Life
+            this.life = 1.0;
+            this.decay = 0.003; 
+            
+            // Color: Cyberpunk Palette
+            const variants = [300, 190, 30]; // Magenta, Cyan, Gold
+            const hue = variants[Math.floor(Math.random() * variants.length)];
+            this.color = `hsla(${hue}, 100%, 60%,`;
+            
+            // Pulse Offset
+            this.pulseOffset = Math.random() * 100;
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // Bounce off walls
+            if (this.x < 0 || this.x > width) this.vx *= -1;
+            if (this.y < 0 || this.y > height) this.vy *= -1;
+
+            // Pulse
+            const breathe = Math.sin(this.life * 10 + this.pulseOffset) * 5;
+            this.size = this.baseSize + breathe;
+
+            // Fade out
+            this.life -= this.decay;
+        }
+
+        draw() {
+            ctx.beginPath();
+            // Glow Effect
+            ctx.shadowBlur = 15; 
+            ctx.shadowColor = this.color + "1)";
+            ctx.fillStyle = this.color + this.life + ")";
+            
+            ctx.arc(this.x, this.y, Math.max(0, this.size), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    // INTERACTION
+    window.addEventListener('mousedown', (e) => {
+        flowers.push(new Flower(e.clientX, e.clientY));
+    });
+
+    // Touch support for mobile vibe checking
+    window.addEventListener('touchstart', (e) => {
+        for (let i=0; i < e.touches.length; i++) {
+            flowers.push(new Flower(e.touches[i].clientX, e.touches[i].clientY));
+        }
+    });
+
+    // ANIMATION LOOP
+    function animate() {
+        // Clear with trails
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.1)';
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = flowers.length - 1; i >= 0; i--) {
+            flowers[i].update();
+            flowers[i].draw();
+
+            if (flowers[i].life <= 0) {
+                flowers.splice(i, 1);
+            }
+        }
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+</script>
+</body>
+</html>
