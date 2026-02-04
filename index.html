@@ -96,6 +96,7 @@
     resize();
 
     // THE FLOWER CLASS
+    // THE FLOWER CLASS (Phase 4: Shapes)
     class Flower {
         constructor(x, y) {
             this.x = x;
@@ -103,10 +104,18 @@
             this.baseSize = Math.random() * 15 + 5; 
             this.size = 0;
             
-            this.angle = Math.random() * Math.PI * 2;
+            // TYPE: 0 = Orb, 1 = Diamond Star, 2 = Lotus
+            this.type = Math.floor(Math.random() * 3);
+            
+            // ROTATION: Random spin speed
+            this.angle = 0;
+            this.spinSpeed = Math.random() * 0.05 - 0.025; // Positive or negative spin
+
+            // MOVEMENT
+            this.moveAngle = Math.random() * Math.PI * 2;
             this.velocity = Math.random() * 0.3 + 0.1; 
-            this.vx = Math.cos(this.angle) * this.velocity;
-            this.vy = Math.sin(this.angle) * this.velocity;
+            this.vx = Math.cos(this.moveAngle) * this.velocity;
+            this.vy = Math.sin(this.moveAngle) * this.velocity;
 
             this.life = 1.0;
             this.decay = 0.002; 
@@ -119,6 +128,9 @@
         update() {
             this.x += this.vx;
             this.y += this.vy;
+            
+            // Update rotation angle
+            this.angle += this.spinSpeed;
 
             if (this.x < 0 || this.x > width) this.vx *= -1;
             if (this.y < 0 || this.y > height) this.vy *= -1;
@@ -129,10 +141,42 @@
         }
 
         draw() {
-            ctx.beginPath();
+            // SAVE the current drawing state
+            ctx.save();
+            // MOVE the "camera" to the flower's center
+            ctx.translate(this.x, this.y);
+            // ROTATE the "camera"
+            ctx.rotate(this.angle);
+
             ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.life})`;
-            ctx.arc(this.x, this.y, Math.max(0, this.size), 0, Math.PI * 2);
-            ctx.fill();
+            
+            // Draw based on type
+            if (this.type === 0) {
+                // TYPE 0: The Classic Orb
+                ctx.beginPath();
+                ctx.arc(0, 0, Math.max(0, this.size), 0, Math.PI * 2);
+                ctx.fill();
+            } 
+            else if (this.type === 1) {
+                // TYPE 1: The Neon Star (A rotating square)
+                ctx.beginPath();
+                // Draw a square centered at (0,0)
+                ctx.rect(-this.size, -this.size, this.size * 2, this.size * 2);
+                ctx.fill();
+            } 
+            else if (this.type === 2) {
+                // TYPE 2: The Digital Lotus (4 overlapping ovals)
+                for (let i = 0; i < 4; i++) {
+                    ctx.rotate(Math.PI / 4); // Rotate 45 degrees
+                    ctx.beginPath();
+                    // Ellipse: x, y, radiusX, radiusY, rotation, startAngle, endAngle
+                    ctx.ellipse(0, 0, Math.max(0, this.size * 1.5), Math.max(0, this.size * 0.5), 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // RESTORE the drawing state so other flowers aren't messed up
+            ctx.restore();
         }
     }
 
