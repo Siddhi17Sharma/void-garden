@@ -27,39 +27,29 @@
     window.addEventListener('resize', resize);
     resize();
 
-    // THE FLOWER CLASS (Phase 1 Logic)
+    // THE FLOWER CLASS
     class Flower {
         constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.baseSize = Math.random() * 15 + 5; // Slightly larger
-        this.size = 0;
-        
-        // MOVEMENT: Slower, floatier drift
-        this.angle = Math.random() * Math.PI * 2;
-        this.velocity = Math.random() * 0.3 + 0.1; // Slower speed
-        this.vx = Math.cos(this.angle) * this.velocity;
-        this.vy = Math.sin(this.angle) * this.velocity;
+            this.x = x;
+            this.y = y;
+            this.baseSize = Math.random() * 15 + 5; 
+            this.size = 0;
+            
+            // MOVEMENT
+            this.angle = Math.random() * Math.PI * 2;
+            this.velocity = Math.random() * 0.3 + 0.1; 
+            this.vx = Math.cos(this.angle) * this.velocity;
+            this.vy = Math.sin(this.angle) * this.velocity;
 
-        this.life = 1.0;
-        this.decay = 0.002; // Lasts longer
-        
-        // COLOR: Specific Neon Palette
-        // 320 = Hot Pink, 170 = Cyan, 270 = Electric Purple, 45 = Gold
-        const hues = [320, 170, 270, 45]; 
-        this.hue = hues[Math.floor(Math.random() * hues.length)];
-        
-        this.pulseOffset = Math.random() * 100;
-    }
-
-    // Update the draw() method to use the new Hue variable
-    draw() {
-        ctx.beginPath();
-        // We don't need shadowBlur anymore because 'lighter' mode handles the glow
-        ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.life})`;
-        ctx.arc(this.x, this.y, Math.max(0, this.size), 0, Math.PI * 2);
-        ctx.fill();
-    }
+            this.life = 1.0;
+            this.decay = 0.002; 
+            
+            // COLOR (Phase 2)
+            const hues = [320, 170, 270, 45]; 
+            this.hue = hues[Math.floor(Math.random() * hues.length)];
+            
+            this.pulseOffset = Math.random() * 100;
+        }
 
         update() {
             this.x += this.vx;
@@ -79,14 +69,10 @@
 
         draw() {
             ctx.beginPath();
-            // Glow Effect
-            ctx.shadowBlur = 15; 
-            ctx.shadowColor = this.color + "1)";
-            ctx.fillStyle = this.color + this.life + ")";
-            
+            // Using 'lighter' composite mode in animate(), so we just set color here
+            ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.life})`;
             ctx.arc(this.x, this.y, Math.max(0, this.size), 0, Math.PI * 2);
             ctx.fill();
-            ctx.shadowBlur = 0;
         }
     }
 
@@ -95,7 +81,6 @@
         flowers.push(new Flower(e.clientX, e.clientY));
     });
 
-    // Touch support for mobile vibe checking
     window.addEventListener('touchstart', (e) => {
         for (let i=0; i < e.touches.length; i++) {
             flowers.push(new Flower(e.touches[i].clientX, e.touches[i].clientY));
@@ -104,14 +89,12 @@
 
     // ANIMATION LOOP
     function animate() {
-        // 1. TRAILS: Draw a very transparent black layer
-        // 'source-over' is standard drawing mode (put new paint on top of old)
+        // 1. TRAILS
         ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = 'rgba(5, 5, 5, 0.05)'; // 0.05 = Long trails, 0.2 = Short trails
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.05)'; 
         ctx.fillRect(0, 0, width, height);
 
-        // 2. GLOW: Switch to 'lighter' mode (Additive Blending)
-        // This makes overlapping colors mix into white light
+        // 2. GLOW
         ctx.globalCompositeOperation = 'lighter';
 
         for (let i = flowers.length - 1; i >= 0; i--) {
