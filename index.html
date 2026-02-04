@@ -5,19 +5,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Void Garden</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #050505; }
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: monospace; }
         canvas { display: block; }
+        
+        /* The "Start" Overlay */
+        #overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            text-align: center;
+            pointer-events: none; /* Let clicks pass through after fading */
+            transition: opacity 1s;
+        }
     </style>
 </head>
 <body>
+
+<div id="overlay">
+    <h1>VOID GARDEN</h1>
+    <p>Click / Tap to Create</p>
+</div>
+
 <canvas id="canvas"></canvas>
 
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
 
     let width, height;
     let flowers = [];
+
+    // --- AUDIO ENGINE (The New Stuff) ---
+    // Browsers require a user gesture to start audio. We create it, but it starts "suspended".
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+
+    // Pentatonic Scale (C Minor Pentatonic) - Always sounds good
+    // Frequencies for: C4, Eb4, F4, G4, Bb4, C5, Eb5, F5...
+    const scale = [
+        261.63, 311.13, 349.23, 392.00, 466.16, 
+        523.25, 622.25, 698.46, 783.99, 932.33,
+        1046.50, 1244.51
+    ];
+
+    function playNote(y) {
+        // Resume audio context if it's suspended (browser policy)
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+            overlay.style.opacity = 0; // Fade out text
+        }
+
+        // Map Y position to a note in our scale
+        // Higher on screen (low Y) = Higher Pitch
+        const percentage = 1 - (y / height); 
+        const index = Math.floor(percentage * scale.length);
+        const frequency = scale[Math.min(index, scale.length - 1)];
+
+        // 1. Create Oscillator (The Sound Source)
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine'; // Sine wave = Pure, glass-like tone
+        osc.frequency.value = frequency;
+
+        // 2. Create Gain Node (The Volume Knob)
+        const gainNode = audioCtx.createGain();
+        
+        // 3. Connect: Osc -> Gain -> Speakers
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        // 4. Envelope (Fade In/Out)
+        const now = audioCtx.currentTime;
+        gainNode.gain.setValueAtTime(0, now); // Start silent
+        gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05); // Attack (fast volume up)
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.0); // Decay (slow fade out)
+
+        // 5. Play and Stop
+        osc.start(now);
+        osc.stop(now + 2.0); // Stop after 2 seconds
+    }
+    // ------------------------------------
 
     // SETUP
     function resize() {
@@ -35,7 +103,6 @@
             this.baseSize = Math.random() * 15 + 5; 
             this.size = 0;
             
-            // MOVEMENT
             this.angle = Math.random() * Math.PI * 2;
             this.velocity = Math.random() * 0.3 + 0.1; 
             this.vx = Math.cos(this.angle) * this.velocity;
@@ -44,10 +111,8 @@
             this.life = 1.0;
             this.decay = 0.002; 
             
-            // COLOR (Phase 2)
             const hues = [320, 170, 270, 45]; 
             this.hue = hues[Math.floor(Math.random() * hues.length)];
-            
             this.pulseOffset = Math.random() * 100;
         }
 
@@ -55,21 +120,16 @@
             this.x += this.vx;
             this.y += this.vy;
 
-            // Bounce off walls
             if (this.x < 0 || this.x > width) this.vx *= -1;
             if (this.y < 0 || this.y > height) this.vy *= -1;
 
-            // Pulse
             const breathe = Math.sin(this.life * 10 + this.pulseOffset) * 5;
             this.size = this.baseSize + breathe;
-
-            // Fade out
             this.life -= this.decay;
         }
 
         draw() {
             ctx.beginPath();
-            // Using 'lighter' composite mode in animate(), so we just set color here
             ctx.fillStyle = `hsla(${this.hue}, 100%, 50%, ${this.life})`;
             ctx.arc(this.x, this.y, Math.max(0, this.size), 0, Math.PI * 2);
             ctx.fill();
@@ -79,22 +139,24 @@
     // INTERACTION
     window.addEventListener('mousedown', (e) => {
         flowers.push(new Flower(e.clientX, e.clientY));
+        playNote(e.clientY); // Trigger Sound
     });
 
     window.addEventListener('touchstart', (e) => {
+        // Prevent default zoom/scroll gestures
+        e.preventDefault(); 
         for (let i=0; i < e.touches.length; i++) {
             flowers.push(new Flower(e.touches[i].clientX, e.touches[i].clientY));
+            playNote(e.touches[i].clientY); // Trigger Sound
         }
     });
 
     // ANIMATION LOOP
     function animate() {
-        // 1. TRAILS
         ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = 'rgba(5, 5, 5, 0.05)'; 
         ctx.fillRect(0, 0, width, height);
 
-        // 2. GLOW
         ctx.globalCompositeOperation = 'lighter';
 
         for (let i = flowers.length - 1; i >= 0; i--) {
